@@ -2,6 +2,8 @@
 
 A simple web application for monitoring user scores from the Tari Airdrop platform. Built for fun.
 
+This project is built to work with [Tari Universe](https://github.com/tari-project/universe), an open-source project that aims to create a decentralized digital assets platform.
+
 ## Features
 
 - Track multiple users' Tari scores
@@ -37,17 +39,6 @@ npm run dev
 ```bash
 # Start the production server
 npm start
-```
-
-## Environment Variables
-
-Edit the `.env` file to configure the application:
-
-```
-PORT=3000                                               # Server port
-DB_PATH=./tari_monitor.db                               # Path to the SQLite database
-ADMIN_USERNAME=admin                                    # Admin username for Basic Auth
-ADMIN_PASSWORD=admin                                    # Admin password for Basic Auth
 ```
 
 ## Authentication
