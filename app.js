@@ -220,56 +220,19 @@ function scheduleNextFetch() {
 
 // Auth middleware
 function requireAuth(req, res, next) {
-  console.log('--- AUTH DEBUG ---');
-  console.log('ENV vars loaded:', {
-    usernameSet: !!process.env.ADMIN_USERNAME,
-    username: process.env.ADMIN_USERNAME,
-    passwordSet: !!process.env.ADMIN_PASSWORD,
-    password: process.env.ADMIN_PASSWORD
-  });
-  
   const authHeader = req.headers.authorization;
-  console.log('Auth header present:', !!authHeader);
   
   if (authHeader) {
-    try {
-      const encoded = authHeader.split(' ')[1];
-      console.log('Base64 encoded credentials:', encoded);
-      
-      const decoded = Buffer.from(encoded, 'base64').toString();
-      console.log('Decoded credentials (without showing full password):', decoded.replace(/:.*/, ':***'));
-      
-      const auth = decoded.split(':');
-      const username = auth[0];
-      const password = auth[1];
-      
-      console.log('Extracted credentials:', {
-        username: username,
-        passwordMatch: password === process.env.ADMIN_PASSWORD,
-        usernameMatch: username === process.env.ADMIN_USERNAME
-      });
-      
-      // Compare byte by byte for debugging
-      console.log('Username comparison:');
-      for (let i = 0; i < Math.max(username.length, process.env.ADMIN_USERNAME.length); i++) {
-        const userChar = username[i] || '';
-        const envChar = process.env.ADMIN_USERNAME[i] || '';
-        console.log(`  Position ${i}: '${userChar}' (${userChar.charCodeAt(0) || 'N/A'}) vs '${envChar}' (${envChar.charCodeAt(0) || 'N/A'})`);
-      }
-      
-      // Check if authentication passes
-      if (username === process.env.ADMIN_USERNAME && password === process.env.ADMIN_PASSWORD) {
-        console.log('Authentication successful!');
-        return next();
-      }
-      
-      console.log('Authentication failed: credentials do not match');
-    } catch (e) {
-      console.error('Error processing auth header:', e);
+    const auth = Buffer.from(authHeader.split(' ')[1], 'base64').toString().split(':');
+    const username = auth[0];
+    const password = auth[1];
+    
+    // Check directly against environment variables instead of database
+    if (username === process.env.ADMIN_USERNAME && password === process.env.ADMIN_PASSWORD) {
+      return next();
     }
   }
   
-  console.log('Sending 401 response');
   res.set('WWW-Authenticate', 'Basic realm="Tari Score Monitor"');
   return res.status(401).send('Authentication required');
 }
