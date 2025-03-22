@@ -4,6 +4,8 @@ A simple web application for monitoring user scores from the Tari Airdrop platfo
 
 This project integrates with the [Tari Airdrop website](https://airdrop.tari.com) to help users track their airdrop scores and rankings.
 
+![Tari Score Monitor Dashboard](screenshot.png)
+
 ## Features
 
 - Track multiple users' Tari scores
@@ -129,6 +131,11 @@ This application works well with Coolify, which requires manual setup of persist
 4. Manually mount a persistent volume for the `/app/data` directory in your Coolify instance
 
 The database will be stored in a persistent volume mounted at `/app/data`, ensuring your data is preserved between container restarts.
+
+## Support This Project
+
+If you find this project helpful in tracking your Tari score, consider signing up for Tari using my referral link:
+[Join Tari Airdrop](https://airdrop.tari.com/?referral=PCoBxp2zAM)
 
 ## License
 
