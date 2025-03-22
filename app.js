@@ -6,8 +6,8 @@ const fetch = require('node-fetch');
 
 // Initialize express app and database
 const app = express();
-const port = process.env.PORT || 3000;
-const dbPath = process.env.DB_PATH || './tari_monitor.db';
+const port = process.env.PORT;
+const dbPath = process.env.DB_PATH;
 const db = new Database(dbPath);
 
 // Environment variables for intervals
@@ -18,12 +18,7 @@ const defaultApiUrl = 'https://airdrop.tari.com/api/user/details';
 
 // Middleware setup
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Log app startup
-console.log(`Starting Tari Score Monitor...`);
-console.log(`Database path: ${dbPath}`);
-console.log(`Static files path: ${path.join(__dirname, 'public')}`);
+app.use(express.static('public'));
 
 // Initialize database tables and settings
 function initializeDatabase() {

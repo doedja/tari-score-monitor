@@ -4,9 +4,18 @@ let scoreChart = null, yatChart = null, currentUserId = null, currentTimeframe =
 // Helper functions
 const formatNumber = value => value === undefined || value === null ? '0' : Number(value).toLocaleString();
 const formatChange = (current, previous) => {
-  if (previous === 0 || previous === null || previous === undefined) return '+0';
-  const change = current - previous;
-  return `${change >= 0 ? '+' : ''}${formatNumber(change)}`;
+  // If single value passed, format it with +/- directly
+  if (previous === undefined) {
+    const value = parseFloat(current);
+    if (isNaN(value)) return '+0';
+    const prefix = value > 0 ? '+' : '';
+    return prefix + formatNumber(value);
+  }
+  
+  // If both current and previous provided, calculate difference
+  const diff = current - previous;
+  const prefix = diff > 0 ? '+' : '';
+  return prefix + formatNumber(diff);
 };
 const formatTimestamp = timestamp => {
   if (!timestamp) return 'Never';
@@ -20,24 +29,43 @@ const getTimeframeLabel = timeframe => {
   return labels[timeframe] || 'period';
 };
 
+// For consistency, use these helpers for showing/hiding elements
+const hideElement = element => {
+  if (element) element.classList.add('d-none');
+};
+
+const showElement = element => {
+  if (element) element.classList.remove('d-none');
+};
+
+// Utility functions for Analytics
+const hideAnalytics = () => {
+  const analyticsElement = document.getElementById('score-analytics');
+  if (analyticsElement) hideElement(analyticsElement);
+};
+
+const hideChanges = () => {
+  const changesElement = document.getElementById('metric-changes');
+  if (changesElement) hideElement(changesElement);
+};
+
+const showAnalytics = () => {
+  const analyticsElement = document.getElementById('score-analytics');
+  if (analyticsElement) showElement(analyticsElement);
+};
+
+const showChanges = () => {
+  const changesElement = document.getElementById('metric-changes');
+  if (changesElement) showElement(changesElement);
+};
+
 // Initialize dropdowns
 function initDropdowns() {
-  const dropdown = document.getElementById('dropdown-container');
-  if (dropdown) {
-    const toggle = dropdown.querySelector('#user-dropdown');
-    const menu = dropdown.querySelector('#user-list');
-    
-    if (toggle && menu) {
-      toggle.addEventListener('click', e => {
-        e.stopPropagation();
-        menu.classList.toggle('hidden');
-      });
-      document.addEventListener('click', e => !dropdown.contains(e.target) && menu.classList.add('hidden'));
-    }
-  }
-  
+  // Force fetch button initialization
   const forceFetchBtn = document.getElementById('force-fetch-btn');
   if (forceFetchBtn) forceFetchBtn.addEventListener('click', () => forceFetch(currentUserId));
+  
+  // Bootstrap handles dropdown toggling automatically through its JavaScript
 }
 
 // Check if there are users
@@ -50,16 +78,16 @@ async function checkUsers() {
     const dashboard = document.getElementById('dashboard');
     
     if (users.length === 0) {
-      loginForm.classList.remove('hidden');
-      dashboard.classList.add('hidden');
+      loginForm.classList.remove('d-none');
+      dashboard.classList.add('d-none');
     } else {
-      loginForm.classList.add('hidden');
-      dashboard.classList.remove('hidden');
+      loginForm.classList.add('d-none');
+      dashboard.classList.remove('d-none');
       loadUsers(users);
     }
   } catch (error) {
     console.error('Error checking users:', error);
-    document.getElementById('login-form').classList.remove('hidden');
+    document.getElementById('login-form').classList.remove('d-none');
     
     if (error.message?.includes('401')) {
       setTimeout(() => window.location.reload(), 1000);
@@ -73,23 +101,24 @@ function loadUsers(users) {
   userList.innerHTML = '';
   
   users.forEach(user => {
-    const item = document.createElement('a');
-    item.href = '#';
-    item.className = 'block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100';
-    item.setAttribute('data-user-id', user.id);
-    item.textContent = user.name;
-    item.addEventListener('click', e => {
+    const item = document.createElement('li');
+    const link = document.createElement('a');
+    link.href = '#';
+    link.className = 'dropdown-item';
+    link.setAttribute('data-user-id', user.id);
+    link.textContent = user.name;
+    link.addEventListener('click', e => {
       e.preventDefault();
       selectUser(user.id);
-      document.querySelector('#user-dropdown span').textContent = user.name;
-      document.querySelector('#user-list').classList.add('hidden');
+      document.querySelector('#user-dropdown').textContent = user.name;
     });
+    item.appendChild(link);
     userList.appendChild(item);
   });
   
   if (users.length > 0) {
     selectUser(users[0].id);
-    document.querySelector('#user-dropdown span').textContent = users[0].name;
+    document.querySelector('#user-dropdown').textContent = users[0].name;
   }
 }
 
@@ -98,12 +127,12 @@ async function selectUser(userId) {
   currentUserId = userId;
   
   const forceFetchBtn = document.getElementById('force-fetch-btn');
-  if (forceFetchBtn) forceFetchBtn.classList.remove('hidden');
+  if (forceFetchBtn) forceFetchBtn.classList.remove('d-none');
   
   const discordStatus = document.getElementById('discord-status');
   if (discordStatus) {
     discordStatus.textContent = '';
-    discordStatus.className = 'ml-3 text-sm';
+    discordStatus.className = 'ms-3 small';
   }
   
   try {
@@ -118,18 +147,20 @@ async function selectUser(userId) {
     const photoElement = document.getElementById('user-photo');
     if (user.photo) {
       photoElement.src = user.photo;
-      photoContainer.classList.remove('hidden');
+      photoContainer.classList.remove('d-none');
     } else {
-      photoContainer.classList.add('hidden');
+      photoContainer.classList.add('d-none');
     }
     
-    // Update rank if available
-    const rankElement = document.getElementById('user-rank');
-    if (latestScore?.rank) {
-      rankElement.textContent = `Rank #${latestScore.rank}`;
-      rankElement.classList.remove('hidden');
-    } else {
-      rankElement.classList.add('hidden');
+    // Update current score and rank
+    const currentScore = document.getElementById('current-score');
+    const currentRank = document.getElementById('current-rank');
+    
+    if (currentScore) currentScore.textContent = formatNumber(latestScore?.total_score || 0);
+    if (currentRank && latestScore?.rank) {
+      currentRank.textContent = `#${latestScore.rank}`;
+    } else if (currentRank) {
+      currentRank.textContent = '--';
     }
     
     // Update last updated and score cards
@@ -150,26 +181,45 @@ async function selectUser(userId) {
 
 // Update score grid with latest score data
 function updateScoreGrid(latestScore) {
-  const scoreGrid = document.getElementById('score-grid');
+  const metricsContainer = document.getElementById('user-metrics');
+  if (!metricsContainer) return;
   
-  if (!latestScore) {
-    scoreGrid.innerHTML = `<div class="col-span-full p-4 bg-blue-50 text-blue-700 rounded-md border border-blue-200">No score data available</div>`;
+  if (!latestScore || (!latestScore.total_score && latestScore.total_score !== 0)) {
+    metricsContainer.innerHTML = `
+      <div class="col-12">
+        <div class="alert alert-info text-center mb-0">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-info-circle me-2" viewBox="0 0 16 16">
+            <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+            <path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/>
+          </svg>
+          No score data available. Please check your token or try refreshing.
+        </div>
+      </div>`;
+    
+    // Also hide analytics and changes sections since we have no data
+    hideAnalytics();
+    hideChanges();
     return;
   }
   
+  // Use the metrics that were in the original version
   const metrics = [
-    { name: 'Total Score', value: latestScore.total_score },
-    { name: 'Gems', value: latestScore.gems },
-    { name: 'Shells', value: latestScore.shells },
-    { name: 'Hammers', value: latestScore.hammers },
-    { name: 'YAT', value: latestScore.yat_holding },
-    { name: 'Followers', value: latestScore.followers }
+    { name: 'TOTAL SCORE', value: latestScore.total_score || 0 },
+    { name: 'GEMS', value: latestScore.gems || 0 },
+    { name: 'SHELLS', value: latestScore.shells || 0 },
+    { name: 'HAMMERS', value: latestScore.hammers || 0 },
+    { name: 'YAT', value: latestScore.yat_holding || 0 },
+    { name: 'FOLLOWERS', value: latestScore.followers || 0 }
   ];
   
-  scoreGrid.innerHTML = metrics.map(metric => `
-    <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
-      <div class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">${metric.name}</div>
-      <div class="text-2xl font-bold text-primary">${formatNumber(metric.value)}</div>
+  metricsContainer.innerHTML = metrics.map(metric => `
+    <div class="col-6 col-md-4 col-lg-2">
+      <div class="card h-100 text-center">
+        <div class="card-body p-3">
+          <div class="small fw-semibold text-uppercase text-muted mb-1">${metric.name}</div>
+          <div class="h4 fw-bold text-primary-custom">${formatNumber(metric.value)}</div>
+        </div>
+      </div>
     </div>
   `).join('');
 }
@@ -179,6 +229,25 @@ async function loadChartData(userId, timeframe) {
   try {
     const response = await fetch(`/api/scores/${userId}?timeframe=${timeframe}`);
     const data = await response.json();
+    
+    // Show "No data" message if no datasets or empty datasets
+    if (!data?.datasets?.length || data.datasets.every(ds => !ds.data?.length)) {
+      const changesElement = document.getElementById('metric-changes');
+      if (changesElement) {
+        changesElement.innerHTML = `
+          <div class="card-body">
+            <div class="small fw-medium text-dark mb-2">Changes this ${getTimeframeLabel(timeframe)}:</div>
+            <div class="bg-light p-3 rounded text-center text-muted">No data available for this time period</div>
+          </div>
+        `;
+        showChanges();
+      }
+      
+      // Create empty charts to avoid errors
+      setupEmptyCharts();
+      return;
+    }
+    
     calculateChanges(data, timeframe);
     
     const scoreCtx = document.getElementById('score-chart').getContext('2d');
@@ -205,6 +274,12 @@ async function loadChartData(userId, timeframe) {
     // Get raw data for timestamps and ranks
     const rawResponse = await fetch(`/api/scores/${userId}?timeframe=${timeframe}&raw=true`);
     const rawData = await rawResponse.json();
+    
+    // Check if we have any valid raw data
+    if (!rawData || !rawData.length) {
+      setupEmptyCharts();
+      return;
+    }
     
     const rankData = rawData.map(entry => parseInt(entry.rank) || null);
     const timestamps = rawData.map(entry => new Date(entry.timestamp));
@@ -410,7 +485,85 @@ async function loadChartData(userId, timeframe) {
     });
   } catch (error) {
     console.error('Error loading chart data:', error);
+    setupEmptyCharts();
   }
+}
+
+// Setup empty charts when no data is available
+function setupEmptyCharts() {
+  const scoreCtx = document.getElementById('score-chart').getContext('2d');
+  const yatCtx = document.getElementById('yat-chart').getContext('2d');
+  
+  if (scoreChart) scoreChart.destroy();
+  if (yatChart) yatChart.destroy();
+  
+  // Common empty chart options
+  const emptyChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { enabled: false }
+    },
+    scales: {
+      x: { display: false },
+      y: { display: false }
+    }
+  };
+  
+  // Create empty score chart
+  scoreChart = new Chart(scoreCtx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        data: [],
+        borderColor: 'rgba(200, 200, 200, 0.5)',
+        backgroundColor: 'rgba(200, 200, 200, 0.1)'
+      }]
+    },
+    options: {
+      ...emptyChartOptions,
+      plugins: {
+        ...emptyChartOptions.plugins,
+        title: {
+          display: true,
+          text: 'No score data available for this time period',
+          color: '#6c757d',
+          font: { family: "'Inter', 'Helvetica', 'Arial', sans-serif", size: 14 }
+        }
+      }
+    }
+  });
+  
+  // Create empty YAT chart
+  yatChart = new Chart(yatCtx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        data: [],
+        borderColor: 'rgba(200, 200, 200, 0.5)',
+        backgroundColor: 'rgba(200, 200, 200, 0.1)'
+      }]
+    },
+    options: {
+      ...emptyChartOptions,
+      plugins: {
+        ...emptyChartOptions.plugins,
+        title: {
+          display: true,
+          text: 'No YAT data available for this time period',
+          color: '#6c757d',
+          font: { family: "'Inter', 'Helvetica', 'Arial', sans-serif", size: 14 }
+        }
+      }
+    }
+  });
+  
+  // Hide analytics and changes sections
+  hideAnalytics();
+  hideChanges();
 }
 
 // Calculate changes based on timeframe
@@ -419,12 +572,13 @@ function calculateChanges(data, timeframe) {
   
   const timeLabel = getTimeframeLabel(timeframe);
   const totalScoreData = data.datasets.find(ds => ds.label === "Total Score")?.data || [];
+  // The backend uses "YAT" as the label
   const yatData = data.datasets.find(ds => ds.label === "YAT")?.data || [];
   const rankDataset = data.datasets.find(ds => ds.label === "Rank");
   
   // Hide changes if no data
   if (!totalScoreData.length && !yatData.length && (!rankDataset || !rankDataset.data.length)) {
-    document.getElementById('metric-changes')?.classList.add('hidden');
+    hideChanges();
     hideAnalytics();
     return;
   }
@@ -437,20 +591,26 @@ function calculateChanges(data, timeframe) {
       
       // Check if we have enough data
       if (!rawData?.length || rawData.length < 2) {
-        changeContainer?.classList.add('hidden');
+        hideChanges();
         hideAnalytics();
         return;
       }
       
-      // Filter valid data points
+      // Filter valid data points - use proper field names
       const validScores = rawData.filter(score => score.total_score !== null && score.total_score !== undefined);
       const validYat = rawData.filter(score => score.yat_holding !== null && score.yat_holding !== undefined);
       const validRanks = rawData.filter(score => 
         score.rank !== null && score.rank !== undefined && score.rank !== '' && !isNaN(parseInt(score.rank)));
       
+      // Always show the changes section even if some data is missing
       if (validScores.length < 2 && validYat.length < 2 && validRanks.length < 2) {
-        changeContainer?.classList.add('hidden');
-        hideAnalytics();
+        // We still want to show the changes section with zeros
+        displayChanges({
+          scoreChange: 0, yatChange: 0, rankChange: 0, timeLabel,
+          firstRank: null, lastRank: null,
+          firstTimestamp: null, lastTimestamp: null
+        });
+        showAnalytics();
         return;
       }
       
@@ -476,23 +636,20 @@ function calculateChanges(data, timeframe) {
         if (firstRank > 0 && lastRank > 0) rankChange = firstRank - lastRank;
       }
       
+      // Display the changes
       displayChanges({
         scoreChange, yatChange, rankChange, timeLabel, firstRank, lastRank,
         firstTimestamp: validScores.length ? new Date(validScores[0].timestamp) : null,
         lastTimestamp: validScores.length ? new Date(validScores[validScores.length - 1].timestamp) : null
       });
       
-      document.getElementById('score-analytics')?.classList.remove('hidden');
+      showAnalytics();
     })
     .catch(error => {
-      console.error('Error fetching raw data for changes:', error);
-      document.getElementById('metric-changes')?.classList.add('hidden');
-      hideAnalytics();
+      console.error('Error calculating changes:', error);
+      hideChanges();
     });
 }
-
-// Hide analytics section
-const hideAnalytics = () => document.getElementById('score-analytics')?.classList.add('hidden');
 
 // Calculate and display next milestone
 function calculateNextMilestone(currentScore) {
@@ -534,7 +691,7 @@ function calculateNextMilestone(currentScore) {
     milestoneProgressBar.style.width = `${progressPercentage}%`;
   }
   
-  analyticsContainer.classList.remove('hidden');
+  showAnalytics();
 }
 
 // Calculate and display score predictions
@@ -599,111 +756,78 @@ function calculateScorePrediction(firstScore, lastScore, timeframe) {
     });
 }
 
-// Display changes in the UI
+// Display changes in metrics between timeframes
 function displayChanges({ scoreChange, yatChange, rankChange, timeLabel, firstRank, lastRank, firstTimestamp, lastTimestamp }) {
   const changeContainer = document.getElementById('metric-changes');
   if (!changeContainer) return;
   
-  // Calculate time period and header format
-  let periodHours = 1, actualTimeElapsed = null;
+  const timeframeHeader = `Changes ${timeLabel}`;
   
-  if (firstTimestamp && lastTimestamp) {
-    actualTimeElapsed = (lastTimestamp - firstTimestamp) / (1000 * 60 * 60);
-    periodHours = actualTimeElapsed;
-  } else {
-    const hoursByTimeframe = {hour: 1, day: 24, week: 168, 'all time': 0};
-    periodHours = hoursByTimeframe[timeLabel] || 1;
-  }
-  
-  // Format timeframe header
-  const timeframeHeaders = {
-    hour: 'Past Hour Changes',
-    day: 'Past 7 Days Changes',
-    week: 'Past 4 Weeks Changes',
-    'all time': 'All Time Changes'
-  };
-  let timeframeHeader = timeframeHeaders[timeLabel] || `Changes (${timeLabel})`;
-  
-  // Add actual time if available
-  if (actualTimeElapsed !== null && timeLabel !== 'all time') {
-    const actualDays = Math.floor(actualTimeElapsed / 24);
-    const actualHours = Math.round(actualTimeElapsed % 24);
-    if (actualDays > 0 || actualHours > 0) {
-      timeframeHeader += ` (${actualDays > 0 ? `${actualDays}d ` : ''}${actualHours > 0 ? `${actualHours}h` : ''})`;
-    }
-  }
-  
-  // If no changes, show simple message
-  if (scoreChange === 0 && yatChange === 0 && rankChange === 0) {
-    changeContainer.innerHTML = `
-      <div class="text-sm font-medium text-gray-700 mb-2">${timeframeHeader}:</div>
-      <div class="bg-gray-50 p-3 rounded-md text-center text-gray-500">No changes detected in this time period</div>
-    `;
-    changeContainer.classList.remove('hidden');
-    return;
-  }
-  
-  // Format changes
+  // Format changes for display
   const formatChangeDisplay = (change, isRank = false) => {
-    const prefix = change > 0 ? '+' : '';
-    const displayClass = change > 0 ? 'text-green-600' : (change < 0 ? 'text-red-600' : 'text-gray-500');
-    const icon = change > 0 ? '↑' : (change < 0 ? '↓' : '─');
+    // Always show the actual change value, don't hide small changes
+    const formattedChange = formatChange(isRank ? -change : change);
+    const displayClass = change > 0 ? 'text-success' : (change < 0 ? 'text-danger' : 'text-muted');
     
-    // Calculate rate if applicable (not for rank)
+    // Calculate hourly rate for score and YAT if possible
     let rateHtml = '';
-    if (!isRank && periodHours > 0 && change !== 0) {
-      const rate = Math.abs(change) / periodHours;
-      const formattedRate = rate >= 10 ? Math.round(rate) : rate.toFixed(1);
-      rateHtml = `<span class="text-xs text-gray-500 ml-2">(${formattedRate}/hr)</span>`;
+    if (!isRank && change !== 0 && firstTimestamp && lastTimestamp) {
+      const hours = (new Date(lastTimestamp) - new Date(firstTimestamp)) / (1000 * 60 * 60);
+      if (hours > 0) {
+        const hourlyRate = (change / hours).toFixed(1);
+        const formattedRate = formatNumber(hourlyRate);
+        rateHtml = `<span class="small text-muted ms-2">(${formattedRate}/hr)</span>`;
+      }
     }
     
-    // Add rank comparison for rank changes
-    const rankCompare = isRank && firstRank && lastRank ? 
-      `<span class="text-xs text-gray-500 ml-2">(#${firstRank} → #${lastRank})</span>` : '';
-      
-    return { displayClass, icon, prefix, rateHtml, rankCompare };
+    // Add rank context if available
+    const rankContext = isRank && firstRank && lastRank ? 
+      `<span class="small text-muted ms-2">(#${firstRank} → #${lastRank})</span>` : '';
+    
+    return { formattedChange, displayClass, rateHtml, rankContext };
   };
   
+  // Format our display data
   const scoreDisplay = formatChangeDisplay(scoreChange);
   const yatDisplay = formatChangeDisplay(yatChange);
   const rankDisplay = formatChangeDisplay(rankChange, true);
   
-  // Create the change cards
+  // Build the HTML
   changeContainer.innerHTML = `
-    <div class="text-sm font-medium text-gray-700 mb-2">${timeframeHeader}:</div>
-    <div class="grid grid-cols-3 gap-3">
-      <div class="bg-gray-50 p-3 rounded-md">
-        <div class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Total Score</div>
-        <div class="flex items-center ${scoreDisplay.displayClass} font-medium text-base">
-          <span class="mr-1">${scoreDisplay.icon}</span>
-          <span>${scoreDisplay.prefix}${formatNumber(scoreChange)}</span>
-          ${scoreDisplay.rateHtml}
+    <div class="card-body">
+      <div class="small fw-medium text-dark mb-2">${timeframeHeader}:</div>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <div class="bg-light p-3 rounded">
+            <div class="small fw-semibold text-uppercase text-muted mb-1">TOTAL SCORE</div>
+            <div class="d-flex align-items-center ${scoreDisplay.displayClass} fw-medium">
+              ${scoreDisplay.formattedChange}${scoreDisplay.rateHtml}
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="bg-gray-50 p-3 rounded-md">
-        <div class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">YAT</div>
-        <div class="flex items-center ${yatDisplay.displayClass} font-medium text-base">
-          <span class="mr-1">${yatDisplay.icon}</span>
-          <span>${yatDisplay.prefix}${formatNumber(yatChange)}</span>
-          ${yatDisplay.rateHtml}
+        
+        <div class="col-md-4">
+          <div class="bg-light p-3 rounded">
+            <div class="small fw-semibold text-uppercase text-muted mb-1">YAT</div>
+            <div class="d-flex align-items-center ${yatDisplay.displayClass} fw-medium">
+              ${yatDisplay.formattedChange}${yatDisplay.rateHtml}
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="bg-gray-50 p-3 rounded-md">
-        <div class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Rank</div>
-        <div class="flex items-center ${rankDisplay.displayClass} font-medium text-base">
-          <span class="mr-1">${rankDisplay.icon}</span>
-          <span>${rankDisplay.prefix}${Math.abs(rankChange)}</span>
-          ${rankDisplay.rankCompare}
+        
+        <div class="col-md-4">
+          <div class="bg-light p-3 rounded">
+            <div class="small fw-semibold text-uppercase text-muted mb-1">RANK</div>
+            <div class="d-flex align-items-center ${rankDisplay.displayClass} fw-medium">
+              ${rankDisplay.formattedChange}${rankDisplay.rankContext}
+            </div>
+          </div>
         </div>
       </div>
     </div>
   `;
   
-  // Show with fade-in effect
-  changeContainer.classList.remove('hidden');
-  changeContainer.style.opacity = '0';
-  changeContainer.style.transition = 'opacity 0.3s ease-in-out';
-  setTimeout(() => changeContainer.style.opacity = '1', 10);
+  showChanges();
 }
 
 // Token submission
@@ -713,7 +837,7 @@ async function submitToken() {
   
   if (!token) {
     errorElement.textContent = 'Please enter a token';
-    errorElement.classList.remove('hidden');
+    errorElement.classList.remove('d-none');
     return;
   }
   
@@ -730,45 +854,48 @@ async function submitToken() {
       window.location.reload();
     } else {
       errorElement.textContent = result.error || 'Failed to add user';
-      errorElement.classList.remove('hidden');
+      errorElement.classList.remove('d-none');
     }
   } catch (error) {
     console.error('Error adding user:', error);
     errorElement.textContent = 'An error occurred. Please try again.';
-    errorElement.classList.remove('hidden');
+    errorElement.classList.remove('d-none');
   }
 }
 
 // Set up timeframe buttons
 function setupTimeframeButtons() {
-  document.querySelectorAll('#timeframe-buttons button').forEach(button => {
-    button.addEventListener('click', () => {
-      const timeframe = button.getAttribute('data-timeframe');
-      
-      // Update active button styling
-      document.querySelectorAll('#timeframe-buttons button').forEach(btn => {
-        btn.classList.remove('bg-primary', 'text-white');
-        btn.classList.add('bg-white', 'text-primary', 'border', 'border-primary');
+  const timeframeButtons = document.querySelectorAll('#timeframe-buttons button');
+  
+  timeframeButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      timeframeButtons.forEach(button => {
+        button.classList.remove('btn-primary');
+        button.classList.add('btn-outline-primary');
       });
-      button.classList.remove('bg-white', 'text-primary', 'border', 'border-primary');
-      button.classList.add('bg-primary', 'text-white');
       
-      // Show loading indicator
-      const changesContainer = document.getElementById('metric-changes');
-      if (changesContainer) {
-        changesContainer.innerHTML = `
-          <div class="text-sm font-medium text-gray-700 mb-2">Changes this ${getTimeframeLabel(timeframe)}:</div>
-          <div class="flex justify-center items-center py-4">
-            <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
-            <span class="ml-2 text-gray-600 text-sm">Calculating changes...</span>
-          </div>
-        `;
-        changesContainer.classList.remove('hidden');
-      }
+      btn.classList.remove('btn-outline-primary');
+      btn.classList.add('btn-primary');
       
-      // Update data
+      const timeframe = btn.getAttribute('data-timeframe');
       currentTimeframe = timeframe;
-      loadChartData(currentUserId, timeframe);
+      
+      if (currentUserId) {
+        loadChartData(currentUserId, timeframe);
+        
+        // Show loading indicator in changes section
+        const changesContainer = document.getElementById('metric-changes');
+        if (changesContainer) {
+          changesContainer.innerHTML = `
+            <div class="small fw-medium text-dark mb-2">Changes this ${getTimeframeLabel(timeframe)}:</div>
+            <div class="d-flex justify-content-center align-items-center py-4">
+              <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+              <span class="ms-2 text-muted small">Calculating changes...</span>
+            </div>
+          `;
+          showChanges();
+        }
+      }
     });
   });
 }
@@ -785,7 +912,7 @@ function setupDiscordFeatures() {
     
     if (discordStatus) {
       discordStatus.textContent = '';
-      discordStatus.className = 'ml-3 text-sm';
+      discordStatus.className = 'ms-3 small';
     }
     
     try {
@@ -797,7 +924,7 @@ function setupDiscordFeatures() {
       
       if (discordStatus) {
         discordStatus.textContent = enabled ? 'Discord notifications enabled' : 'Discord notifications disabled';
-        discordStatus.className = 'ml-3 text-sm text-green-600';
+        discordStatus.className = 'ms-3 small text-green-600';
         setTimeout(() => discordStatus.textContent = '', 3000);
       }
     } catch (error) {
@@ -806,7 +933,7 @@ function setupDiscordFeatures() {
       
       if (discordStatus) {
         discordStatus.textContent = 'Failed to update setting';
-        discordStatus.className = 'ml-3 text-sm text-red-600';
+        discordStatus.className = 'ms-3 small text-red-600';
       }
     }
   });
@@ -825,12 +952,12 @@ function setupDiscordFeatures() {
       saveWebhookBtn.textContent = 'Saving...';
       saveWebhookBtn.classList.add('opacity-70');
       discordStatus.textContent = '';
-      discordStatus.className = 'ml-3 text-sm';
+      discordStatus.className = 'ms-3 small';
       
       // Validate URL
       if (!webhookUrl.startsWith('https://discord.com/api/webhooks/')) {
         discordStatus.textContent = 'Please enter a valid Discord webhook URL';
-        discordStatus.className = 'ml-3 text-sm text-red-600';
+        discordStatus.className = 'ms-3 small text-red-600';
         saveWebhookBtn.disabled = false;
         saveWebhookBtn.textContent = 'Save';
         saveWebhookBtn.classList.remove('opacity-70');
@@ -845,12 +972,12 @@ function setupDiscordFeatures() {
         });
         
         discordStatus.textContent = 'Webhook URL saved successfully!';
-        discordStatus.className = 'ml-3 text-sm text-green-600';
+        discordStatus.className = 'ms-3 small text-green-600';
         setTimeout(() => discordStatus.textContent = '', 3000);
       } catch (error) {
         console.error('Error saving webhook URL:', error);
         discordStatus.textContent = 'Failed to save webhook URL';
-        discordStatus.className = 'ml-3 text-sm text-red-600';
+        discordStatus.className = 'ms-3 small text-red-600';
       } finally {
         saveWebhookBtn.disabled = false;
         saveWebhookBtn.textContent = 'Save';
@@ -875,7 +1002,7 @@ function setupDiscordFeatures() {
         </svg>Sending...
       `;
       discordStatus.textContent = '';
-      discordStatus.className = 'ml-3 text-sm';
+      discordStatus.className = 'ms-3 small';
       
       try {
         const response = await fetch(`/api/send-discord-notification/${currentUserId}`, {
@@ -887,16 +1014,16 @@ function setupDiscordFeatures() {
         
         if (result.success) {
           discordStatus.textContent = 'Notification sent successfully!';
-          discordStatus.className = 'ml-3 text-sm text-green-600';
+          discordStatus.className = 'ms-3 small text-green-600';
           setTimeout(() => discordStatus.textContent = '', 5000);
         } else {
           discordStatus.textContent = result.error || 'Failed to send notification';
-          discordStatus.className = 'ml-3 text-sm text-red-600';
+          discordStatus.className = 'ms-3 small text-red-600';
         }
       } catch (error) {
         console.error('Error sending Discord notification:', error);
         discordStatus.textContent = 'Error: Failed to send notification';
-        discordStatus.className = 'ml-3 text-sm text-red-600';
+        discordStatus.className = 'ms-3 small text-red-600';
       } finally {
         sendDiscordButton.disabled = false;
         sendDiscordButton.classList.remove('opacity-70');
@@ -910,71 +1037,75 @@ function setupDiscordFeatures() {
   }
 }
 
-// Token modal functionality
+// Initialize modal functionality
 function setupTokenModal() {
+  const modal = document.getElementById('add-token-modal');
   const addTokenBtn = document.getElementById('add-token-btn');
   const closeModalBtn = document.getElementById('close-modal');
-  const modal = document.getElementById('add-token-modal');
-  const addNewTokenBtn = document.getElementById('add-new-token');
   
-  if (addTokenBtn && modal) {
-    addTokenBtn.addEventListener('click', () => {
-      modal.classList.remove('hidden');
-      document.getElementById('new-token-input').value = '';
-      document.getElementById('new-token-error').classList.add('hidden');
-    });
-    
-    closeModalBtn?.addEventListener('click', () => modal.classList.add('hidden'));
-    
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) modal.classList.add('hidden');
-    });
-    
-    addNewTokenBtn?.addEventListener('click', addNewToken);
-  }
+  addTokenBtn?.addEventListener('click', () => {
+    // For Bootstrap, we use the show() method from the Modal API
+    const modalInstance = new bootstrap.Modal(modal);
+    modalInstance.show();
+    document.getElementById('new-token-error').classList.add('d-none');
+    document.getElementById('new-token-input').value = '';
+  });
+  
+  // Bootstrap handles hiding the modal with data-bs-dismiss="modal"
+  
+  // Add event listener to Add button
+  document.getElementById('add-new-token')?.addEventListener('click', addNewToken);
 }
 
 // Add a new token
 async function addNewToken() {
-  const tokenInput = document.getElementById('new-token-input');
+  const newTokenInput = document.getElementById('new-token-input');
   const errorElement = document.getElementById('new-token-error');
-  const modal = document.getElementById('add-token-modal');
-  const token = tokenInput.value.trim();
+  const token = newTokenInput?.value?.trim();
   
   if (!token) {
     errorElement.textContent = 'Please enter a token';
-    errorElement.classList.remove('hidden');
+    errorElement.classList.remove('d-none');
     return;
   }
   
   try {
+    // Use the correct API endpoint for adding tokens
     const response = await fetch('/api/init', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token })
     });
+    
+    // Check if the response is JSON before trying to parse it
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      throw new Error('Server returned non-JSON response. Please check server logs.');
+    }
     
     const result = await response.json();
     
     if (result.success) {
-      modal.classList.add('hidden');
+      // Close modal and refresh users
+      const modal = document.getElementById('add-token-modal');
+      const bootstrapModal = bootstrap.Modal.getInstance(modal);
+      if (bootstrapModal) bootstrapModal.hide();
       
-      const usersResponse = await fetch('/api/users');
-      const users = await usersResponse.json();
-      loadUsers(users);
+      // Refresh user list
+      checkUsers();
       
       if (result.user?.id) {
         selectUser(result.user.id);
-        document.querySelector('#user-dropdown span').textContent = result.user.name;
+        document.querySelector('#user-dropdown').textContent = result.user.name;
       }
     } else {
       errorElement.textContent = result.error || 'Failed to add user';
-      errorElement.classList.remove('hidden');
+      errorElement.classList.remove('d-none');
     }
   } catch (error) {
     console.error('Error adding token:', error);
     errorElement.textContent = 'An error occurred. Please try again.';
-    errorElement.classList.remove('hidden');
+    errorElement.classList.remove('d-none');
   }
 }
 
