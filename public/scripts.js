@@ -71,7 +71,28 @@ function initDropdowns() {
 // Check if there are users
 async function checkUsers() {
   try {
-    const response = await fetch('/api/users');
+    // Get credentials from browser authentication
+    const credentials = btoa(`${localStorage.getItem('auth_username') || ''}:${localStorage.getItem('auth_password') || ''}`);
+    
+    const response = await fetch('/api/users', {
+      headers: {
+        'Authorization': `Basic ${credentials}`
+      }
+    });
+    
+    if (response.status === 401) {
+      // Show login form if unauthorized
+      document.getElementById('login-form').classList.remove('d-none');
+      document.getElementById('dashboard').classList.add('d-none');
+      return;
+    }
+    
+    // Check if the response is JSON before trying to parse it
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      throw new Error('Server returned non-JSON response. Please check server logs.');
+    }
+    
     const users = await response.json();
     
     const loginForm = document.getElementById('login-form');
@@ -88,38 +109,62 @@ async function checkUsers() {
   } catch (error) {
     console.error('Error checking users:', error);
     document.getElementById('login-form').classList.remove('d-none');
-    
-    if (error.message?.includes('401')) {
-      setTimeout(() => window.location.reload(), 1000);
-    }
+    document.getElementById('dashboard').classList.add('d-none');
   }
 }
 
 // Load users into dropdown
-function loadUsers(users) {
+async function loadUsers(users) {
   const userList = document.getElementById('user-list');
   userList.innerHTML = '';
   
+  if (users.length === 0) {
+    document.getElementById('user-dropdown').textContent = 'No Users';
+    return;
+  }
+  
   users.forEach(user => {
-    const item = document.createElement('li');
+    const listItem = document.createElement('li');
     const link = document.createElement('a');
-    link.href = '#';
     link.className = 'dropdown-item';
-    link.setAttribute('data-user-id', user.id);
+    link.href = '#';
     link.textContent = user.name;
-    link.addEventListener('click', e => {
+    link.addEventListener('click', (e) => {
       e.preventDefault();
-      selectUser(user.id);
       document.querySelector('#user-dropdown').textContent = user.name;
+      selectUser(user.id);
     });
-    item.appendChild(link);
-    userList.appendChild(item);
+    
+    listItem.appendChild(link);
+    userList.appendChild(listItem);
   });
   
-  if (users.length > 0) {
-    selectUser(users[0].id);
-    document.querySelector('#user-dropdown').textContent = users[0].name;
+  // Select the first user by default
+  selectUser(users[0].id);
+  document.querySelector('#user-dropdown').textContent = users[0].name;
+}
+
+// Helper function for authenticated API requests
+async function fetchWithAuth(url, options = {}) {
+  const credentials = btoa(`${localStorage.getItem('auth_username') || ''}:${localStorage.getItem('auth_password') || ''}`);
+  
+  const authOptions = {
+    ...options,
+    headers: {
+      ...options.headers,
+      'Authorization': `Basic ${credentials}`
+    }
+  };
+  
+  const response = await fetch(url, authOptions);
+  
+  if (response.status === 401) {
+    // If unauthorized, force reload to show login prompt
+    setTimeout(() => window.location.reload(), 100);
+    throw new Error('Authentication required');
   }
+  
+  return response;
 }
 
 // Select a user
@@ -136,7 +181,7 @@ async function selectUser(userId) {
   }
   
   try {
-    const response = await fetch(`/api/user/${userId}`);
+    const response = await fetchWithAuth(`/api/user/${userId}`);
     const { user, latestScore, stats } = await response.json();
     
     // Update user info
@@ -227,7 +272,7 @@ function updateScoreGrid(latestScore) {
 // Load chart data
 async function loadChartData(userId, timeframe) {
   try {
-    const response = await fetch(`/api/scores/${userId}?timeframe=${timeframe}`);
+    const response = await fetchWithAuth(`/api/scores/${userId}?timeframe=${timeframe}`);
     const data = await response.json();
     
     // Show "No data" message if no datasets or empty datasets
@@ -272,7 +317,7 @@ async function loadChartData(userId, timeframe) {
     yatGradient.addColorStop(1, 'rgba(54, 162, 235, 0.01)');
 
     // Get raw data for timestamps and ranks
-    const rawResponse = await fetch(`/api/scores/${userId}?timeframe=${timeframe}&raw=true`);
+    const rawResponse = await fetchWithAuth(`/api/scores/${userId}?timeframe=${timeframe}&raw=true`);
     const rawData = await rawResponse.json();
     
     // Check if we have any valid raw data
@@ -584,7 +629,7 @@ function calculateChanges(data, timeframe) {
   }
   
   // Get raw data for accurate calculations
-  fetch(`/api/scores/${currentUserId}?timeframe=${timeframe}&raw=true`)
+  fetchWithAuth(`/api/scores/${currentUserId}?timeframe=${timeframe}&raw=true`)
     .then(response => response.json())
     .then(rawData => {
       const changeContainer = document.getElementById('metric-changes');
@@ -900,141 +945,93 @@ function setupTimeframeButtons() {
   });
 }
 
-// Set up Discord notification features
+// Setup Discord notification features
 function setupDiscordFeatures() {
-  const toggle = document.getElementById('discord-toggle');
+  const discordToggle = document.getElementById('discord-toggle');
+  const saveWebhookBtn = document.getElementById('save-webhook-url');
+  const sendDiscordNowBtn = document.getElementById('send-discord-now');
+  const webhookInput = document.getElementById('discord-webhook-url');
   const discordStatus = document.getElementById('discord-status');
   
-  // Handle toggle change
-  toggle?.addEventListener('change', async (e) => {
+  if (!discordToggle || !saveWebhookBtn || !sendDiscordNowBtn || !webhookInput) return;
+  
+  discordToggle.addEventListener('change', async () => {
     if (!currentUserId) return;
-    const enabled = e.target.checked;
-    
-    if (discordStatus) {
-      discordStatus.textContent = '';
-      discordStatus.className = 'ms-3 small';
-    }
     
     try {
-      await fetch(`/api/settings/${currentUserId}`, {
+      const response = await fetchWithAuth(`/api/settings/${currentUserId}`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ discord_enabled: enabled })
+        body: JSON.stringify({discord_enabled: discordToggle.checked})
       });
       
-      if (discordStatus) {
-        discordStatus.textContent = enabled ? 'Discord notifications enabled' : 'Discord notifications disabled';
-        discordStatus.className = 'ms-3 small text-green-600';
-        setTimeout(() => discordStatus.textContent = '', 3000);
-      }
-    } catch (error) {
-      console.error('Error updating Discord setting:', error);
-      e.target.checked = !enabled;
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || 'Failed to update Discord settings');
       
-      if (discordStatus) {
-        discordStatus.textContent = 'Failed to update setting';
-        discordStatus.className = 'ms-3 small text-red-600';
-      }
+      discordStatus.textContent = 'Settings saved';
+      discordStatus.className = 'ms-3 small text-success';
+      setTimeout(() => { discordStatus.textContent = ''; }, 3000);
+    } catch (error) {
+      console.error('Error updating Discord settings:', error);
+      discordStatus.textContent = 'Error: ' + error.message;
+      discordStatus.className = 'ms-3 small text-danger';
     }
   });
   
-  // Handle webhook URL saving
-  const webhookInput = document.getElementById('discord-webhook-url');
-  const saveWebhookBtn = document.getElementById('save-webhook-url');
-  
-  if (webhookInput && saveWebhookBtn && discordStatus) {
-    saveWebhookBtn.addEventListener('click', async () => {
-      if (!currentUserId) return;
-      const webhookUrl = webhookInput.value.trim();
-      
-      // Show loading state
-      saveWebhookBtn.disabled = true;
-      saveWebhookBtn.textContent = 'Saving...';
-      saveWebhookBtn.classList.add('opacity-70');
-      discordStatus.textContent = '';
-      discordStatus.className = 'ms-3 small';
-      
-      // Validate URL
-      if (!webhookUrl.startsWith('https://discord.com/api/webhooks/')) {
-        discordStatus.textContent = 'Please enter a valid Discord webhook URL';
-        discordStatus.className = 'ms-3 small text-red-600';
-        saveWebhookBtn.disabled = false;
-        saveWebhookBtn.textContent = 'Save';
-        saveWebhookBtn.classList.remove('opacity-70');
-        return;
+  saveWebhookBtn.addEventListener('click', async () => {
+    if (!currentUserId) return;
+    
+    const webhook = webhookInput.value.trim();
+    
+    try {
+      // Simple validation
+      if (webhook && !webhook.includes('discord.com/api/webhooks')) {
+        throw new Error('Invalid Discord webhook URL');
       }
       
-      try {
-        await fetch(`/api/settings/${currentUserId}`, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ discord_webhook_url: webhookUrl })
-        });
-        
-        discordStatus.textContent = 'Webhook URL saved successfully!';
-        discordStatus.className = 'ms-3 small text-green-600';
-        setTimeout(() => discordStatus.textContent = '', 3000);
-      } catch (error) {
-        console.error('Error saving webhook URL:', error);
-        discordStatus.textContent = 'Failed to save webhook URL';
-        discordStatus.className = 'ms-3 small text-red-600';
-      } finally {
-        saveWebhookBtn.disabled = false;
-        saveWebhookBtn.textContent = 'Save';
-        saveWebhookBtn.classList.remove('opacity-70');
-      }
-    });
-  }
-  
-  // Handle manual notification sending
-  const sendDiscordButton = document.getElementById('send-discord-now');
-  
-  if (sendDiscordButton && discordStatus) {
-    sendDiscordButton.addEventListener('click', async () => {
-      if (!currentUserId) return;
+      const response = await fetchWithAuth(`/api/settings/${currentUserId}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({discord_webhook_url: webhook})
+      });
       
-      sendDiscordButton.disabled = true;
-      sendDiscordButton.classList.add('opacity-70');
-      sendDiscordButton.innerHTML = `
-        <svg class="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>Sending...
-      `;
-      discordStatus.textContent = '';
-      discordStatus.className = 'ms-3 small';
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || 'Failed to save webhook URL');
       
-      try {
-        const response = await fetch(`/api/send-discord-notification/${currentUserId}`, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'}
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-          discordStatus.textContent = 'Notification sent successfully!';
-          discordStatus.className = 'ms-3 small text-green-600';
-          setTimeout(() => discordStatus.textContent = '', 5000);
-        } else {
-          discordStatus.textContent = result.error || 'Failed to send notification';
-          discordStatus.className = 'ms-3 small text-red-600';
-        }
-      } catch (error) {
-        console.error('Error sending Discord notification:', error);
-        discordStatus.textContent = 'Error: Failed to send notification';
-        discordStatus.className = 'ms-3 small text-red-600';
-      } finally {
-        sendDiscordButton.disabled = false;
-        sendDiscordButton.classList.remove('opacity-70');
-        sendDiscordButton.innerHTML = `
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-          </svg>Send Discord Now
-        `;
-      }
-    });
-  }
+      discordStatus.textContent = 'Webhook URL saved';
+      discordStatus.className = 'ms-3 small text-success';
+      setTimeout(() => { discordStatus.textContent = ''; }, 3000);
+    } catch (error) {
+      console.error('Error saving webhook URL:', error);
+      discordStatus.textContent = 'Error: ' + error.message;
+      discordStatus.className = 'ms-3 small text-danger';
+    }
+  });
+  
+  sendDiscordNowBtn.addEventListener('click', async () => {
+    if (!currentUserId) return;
+    
+    discordStatus.textContent = 'Sending...';
+    discordStatus.className = 'ms-3 small text-info';
+    
+    try {
+      const response = await fetchWithAuth(`/api/send-discord-notification/${currentUserId}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+      });
+      
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || 'Failed to send notification');
+      
+      discordStatus.textContent = 'Notification sent!';
+      discordStatus.className = 'ms-3 small text-success';
+      setTimeout(() => { discordStatus.textContent = ''; }, 3000);
+    } catch (error) {
+      console.error('Error sending Discord notification:', error);
+      discordStatus.textContent = 'Error: ' + error.message;
+      discordStatus.className = 'ms-3 small text-danger';
+    }
+  });
 }
 
 // Initialize modal functionality
@@ -1115,38 +1112,35 @@ function forceFetch(userId) {
   
   const forceFetchBtn = document.getElementById('force-fetch-btn');
   forceFetchBtn.disabled = true;
-  forceFetchBtn.classList.add('opacity-50');
   forceFetchBtn.innerHTML = `
-    <svg class="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-    </svg><span>Refreshing...</span>
+    <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+    Fetching...
   `;
   
-  fetch(`/api/force-fetch/${userId}`, {
+  fetchWithAuth(`/api/force-fetch/${userId}`, {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'}
+    headers: { 'Content-Type': 'application/json' }
   })
-  .then(response => response.json())
-  .then(data => {
-    resetForceFetchButton(forceFetchBtn);
-    if (data.success) selectUser(userId);
-    else console.error('Failed to force fetch:', data.error);
-  })
-  .catch(error => {
-    console.error('Error during force fetch:', error);
-    resetForceFetchButton(forceFetchBtn);
-  });
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) selectUser(userId);
+      resetForceFetchButton(forceFetchBtn);
+    })
+    .catch(error => {
+      console.error('Error force fetching data:', error);
+      resetForceFetchButton(forceFetchBtn);
+    });
 }
 
-// Reset force fetch button state
+// Reset force fetch button to initial state
 function resetForceFetchButton(button) {
   button.disabled = false;
-  button.classList.remove('opacity-50');
   button.innerHTML = `
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-      <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
-    </svg><span>Refresh</span>
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-repeat me-1" viewBox="0 0 16 16">
+      <path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z"/>
+      <path fill-rule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z"/>
+    </svg>
+    <span>Refresh</span>
   `;
 }
 
@@ -1176,40 +1170,30 @@ function setupTokenManagement() {
     deleteTokenBtn.addEventListener('click', async () => {
       if (!currentUserId) return;
       
-      // Show confirmation dialog
-      if (!confirm('Are you sure you want to delete this token? You will need to add it again to continue monitoring this user.')) {
+      if (!confirm('Are you sure you want to delete this token? This cannot be undone.')) {
         return;
       }
       
-      // Show loading state
       deleteTokenBtn.disabled = true;
-      deleteTokenBtn.classList.add('opacity-70');
       deleteTokenBtn.innerHTML = `
-        <svg class="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>Deleting...
+        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+        Deleting...
       `;
       
       try {
-        const response = await fetch(`/api/user/${currentUserId}/delete`, {
+        const response = await fetchWithAuth(`/api/user/${currentUserId}/delete`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'}
         });
         
-        const result = await response.json();
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Failed to delete token');
         
-        if (result.success) {
-          alert('Token deleted successfully. You will now be redirected to the login page.');
-          // Reload the page to show the login form
-          window.location.reload();
-        } else {
-          alert(`Failed to delete token: ${result.error || 'Unknown error'}`);
-          resetDeleteButton(deleteTokenBtn);
-        }
+        // Reload page on success
+        window.location.reload();
       } catch (error) {
         console.error('Error deleting token:', error);
-        alert('Error deleting token. Please try again.');
+        alert('Error: ' + error.message);
         resetDeleteButton(deleteTokenBtn);
       }
     });
@@ -1219,7 +1203,6 @@ function setupTokenManagement() {
 // Reset delete button state
 function resetDeleteButton(button) {
   button.disabled = false;
-  button.classList.remove('opacity-70');
   button.innerHTML = `
     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
