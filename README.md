@@ -12,6 +12,18 @@ This project integrates with the [Tari Airdrop website](https://airdrop.tari.com
 - Monitor user rank in the Tari ecosystem
 - Send Discord notifications periodically on score changes
 
+## Finding Your Tari Token
+
+To track a user's score, you'll need their Tari token. Here's how to find it:
+
+1. Log in to [airdrop.tari.com](https://airdrop.tari.com)
+2. Open browser Developer Tools (F12 or right-click > Inspect)
+3. Navigate to:
+   - Application tab
+   - Cookies on the left sidebar
+   - Find the `token` value under airdrop.tari.com
+
+This token is required when adding a new user to monitor.
 
 ## Installation
 
