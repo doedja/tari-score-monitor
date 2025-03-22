@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  tari-score-monitor:
+    build: .
+    image: tari-score-monitor
+    container_name: tari-score-monitor
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - tari-data:/app/data
+    environment:
+      - DB_PATH=/app/data/tari_monitor.db
+      - DISCORD_NOTIFICATION_INTERVAL=1800
+      - FETCH_INTERVAL_MIN=240
+      - FETCH_INTERVAL_MAX=300
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=admin
+
+volumes:
+  tari-data:
+    name: tari-score-monitor-data 

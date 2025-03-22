@@ -82,6 +82,56 @@ The application automatically fetches new scores according to the fetch interval
 
 This application can be deployed to any Node.js hosting service. For optimal performance, consider using services that support SQLite or offer filesystem persistence.
 
+## Docker Deployment
+
+The application can be easily deployed using Docker for containerization and persistent storage.
+
+### Using Docker Compose (Recommended)
+
+```bash
+# Clone the repository
+git clone https://github.com/doedja/tari-score-monitor.git
+cd tari-score-monitor
+
+# Edit the docker-compose.yml to set your environment variables
+# Especially set strong admin credentials and Discord webhook if needed
+
+# Start the container
+docker-compose up -d
+```
+
+The application will be available at http://localhost:3000.
+
+### Using Docker directly
+
+```bash
+# Build the Docker image
+docker build -t tari-score-monitor .
+
+# Run the container with persistent volume
+docker run -d \
+  --name tari-score-monitor \
+  -p 3000:3000 \
+  -v tari-data:/app/data \
+  -e DB_PATH=/app/data/tari_monitor.db \
+  -e ADMIN_USERNAME=your_username \
+  -e ADMIN_PASSWORD=your_password \
+  tari-score-monitor
+```
+
+### Deployment on Coolify
+
+This application works well with Coolify, which handles persistent storage automatically:
+
+1. Import this Git repository into your Coolify instance
+2. Set the following environment variables:
+   - `DB_PATH=/app/data/tari_monitor.db`
+   - Your admin credentials and other config options
+3. Deploy the application
+4. Coolify will automatically mount a persistent volume for the `/app/data` directory
+
+The database will be stored in a persistent volume mounted at `/app/data`, ensuring your data is preserved between container restarts.
+
 ## License
 
 MIT 
