@@ -44,10 +44,6 @@ function initializeDatabase() {
       fetch_interval_max INTEGER DEFAULT 300,
       discord_notification_interval INTEGER DEFAULT 1800
     );
-    CREATE TABLE IF NOT EXISTS admin_users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE NOT NULL, password TEXT NOT NULL
-    );
   `);
 
   // Handle database upgrades gracefully
@@ -94,14 +90,6 @@ function initializeDatabase() {
     db.prepare(`
       UPDATE settings SET fetch_interval_min = ?, fetch_interval_max = ?, discord_notification_interval = ? WHERE id = 1
     `).run(fetchIntervalMin, fetchIntervalMax, discordNotificationInterval);
-  }
-  
-  // Insert default admin user if needed
-  const adminUsername = process.env.ADMIN_USERNAME || 'admin';
-  const adminPassword = process.env.ADMIN_PASSWORD || 'tarimonitor';
-  const adminUser = db.prepare('SELECT id FROM admin_users WHERE username = ?').get(adminUsername);
-  if (!adminUser) {
-    db.prepare('INSERT INTO admin_users (username, password) VALUES (?, ?)').run(adminUsername, adminPassword);
   }
 }
 
@@ -238,9 +226,11 @@ function requireAuth(req, res, next) {
     const auth = Buffer.from(authHeader.split(' ')[1], 'base64').toString().split(':');
     const username = auth[0];
     const password = auth[1];
-    const user = db.prepare('SELECT * FROM admin_users WHERE username = ?').get(username);
     
-    if (user && user.password === password) return next();
+    // Check directly against environment variables instead of database
+    if (username === process.env.ADMIN_USERNAME && password === process.env.ADMIN_PASSWORD) {
+      return next();
+    }
   }
   
   res.set('WWW-Authenticate', 'Basic realm="Tari Score Monitor"');
