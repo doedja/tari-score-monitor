@@ -16,7 +16,7 @@ A simple web application for monitoring user scores from the Tari Airdrop platfo
 ```bash
 # Clone the repository
 git clone https://github.com/doedja/tari-score-monitor.git
-cd tari-monitor
+cd tari-score-monitor
 
 # Install dependencies
 npm install
