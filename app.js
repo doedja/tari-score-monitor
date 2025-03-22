@@ -98,7 +98,7 @@ initializeDatabase();
 
 // Normalize different API response formats
 function normalizeApiResponse(data) {
-  if (data.total_score !== undefined) return data;requireauth
+  if (data.total_score !== undefined) return data;
   
   if (data.user && data.user.rank) {
     const userData = data.user;
@@ -537,12 +537,15 @@ app.post('/api/user/:userId/delete', requireAuth, async (req, res) => {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
     
-    // Delete token by setting it to null, preserving user data
-    db.prepare('UPDATE users SET token = NULL WHERE id = ?').run(userId);
+    // First delete all scores for this user to avoid foreign key constraint issues
+    db.prepare('DELETE FROM scores WHERE user_id = ?').run(userId);
     
-    res.json({ success: true, message: 'User token removed successfully' });
+    // Then delete the user record
+    db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+    
+    res.json({ success: true, message: 'User deleted successfully' });
   } catch (error) {
-    console.error('Error deleting user token:', error.message);
+    console.error('Error deleting user:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
