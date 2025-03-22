@@ -121,12 +121,12 @@ docker run -d \
 
 ### Deployment on Coolify
 
-This application works well with Coolify, which handles persistent storage automatically:
+This application works well with Coolify, which requires manual setup of persistent storage:
 
 1. Import this Git repository into your Coolify instance
 2. Set the environment variables
 3. Deploy the application
-4. Coolify will automatically mount a persistent volume for the `/app/data` directory
+4. Manually mount a persistent volume for the `/app/data` directory in your Coolify instance
 
 The database will be stored in a persistent volume mounted at `/app/data`, ensuring your data is preserved between container restarts.
 
