@@ -68,48 +68,57 @@ function initDropdowns() {
   // Bootstrap handles dropdown toggling automatically through its JavaScript
 }
 
+// Helper function to handle authentication errors
+function handleAuthError(response) {
+  if (response.status === 401) {
+    // Browser will automatically show the auth popup
+    // when a 401 with WWW-Authenticate header is received
+    window.location.reload();
+    throw new Error('Authentication required');
+  }
+  return response;
+}
+
 // Check if there are users
 async function checkUsers() {
   try {
-    // Get credentials from browser authentication
-    const credentials = btoa(`${localStorage.getItem('auth_username') || ''}:${localStorage.getItem('auth_password') || ''}`);
-    
-    const response = await fetch('/api/users', {
-      headers: {
-        'Authorization': `Basic ${credentials}`
-      }
-    });
-    
-    if (response.status === 401) {
-      // Show login form if unauthorized
-      document.getElementById('login-form').classList.remove('d-none');
-      document.getElementById('dashboard').classList.add('d-none');
-      return;
-    }
+    const response = await fetch('/api/users');
+    const handledResponse = handleAuthError(response);
     
     // Check if the response is JSON before trying to parse it
-    const contentType = response.headers.get('content-type');
+    const contentType = handledResponse.headers.get('content-type');
     if (!contentType || !contentType.includes('application/json')) {
       throw new Error('Server returned non-JSON response. Please check server logs.');
     }
     
-    const users = await response.json();
+    const users = await handledResponse.json();
     
-    const loginForm = document.getElementById('login-form');
+    const tokenForm = document.getElementById('token-form');
     const dashboard = document.getElementById('dashboard');
     
     if (users.length === 0) {
-      loginForm.classList.remove('d-none');
-      dashboard.classList.add('d-none');
-    } else {
-      loginForm.classList.add('d-none');
-      dashboard.classList.remove('d-none');
-      loadUsers(users);
+      // Show token form if no users
+      showElement(tokenForm);
+      hideElement(dashboard);
+      return;
     }
+    
+    // Handle users and show dashboard
+    hideElement(tokenForm);
+    showElement(dashboard);
+    
+    // Load users into dropdown
+    loadUsers(users);
+    
+    // Setup other features
+    setupTimeframeButtons();
+    setupDiscordFeatures();
+    setupTokenManagement();
   } catch (error) {
     console.error('Error checking users:', error);
-    document.getElementById('login-form').classList.remove('d-none');
-    document.getElementById('dashboard').classList.add('d-none');
+    if (error.message !== 'Authentication required') {
+      alert(`Error: ${error.message}`);
+    }
   }
 }
 
@@ -144,29 +153,6 @@ async function loadUsers(users) {
   document.querySelector('#user-dropdown').textContent = users[0].name;
 }
 
-// Helper function for authenticated API requests
-async function fetchWithAuth(url, options = {}) {
-  const credentials = btoa(`${localStorage.getItem('auth_username') || ''}:${localStorage.getItem('auth_password') || ''}`);
-  
-  const authOptions = {
-    ...options,
-    headers: {
-      ...options.headers,
-      'Authorization': `Basic ${credentials}`
-    }
-  };
-  
-  const response = await fetch(url, authOptions);
-  
-  if (response.status === 401) {
-    // If unauthorized, force reload to show login prompt
-    setTimeout(() => window.location.reload(), 100);
-    throw new Error('Authentication required');
-  }
-  
-  return response;
-}
-
 // Select a user
 async function selectUser(userId) {
   currentUserId = userId;
@@ -181,8 +167,9 @@ async function selectUser(userId) {
   }
   
   try {
-    const response = await fetchWithAuth(`/api/user/${userId}`);
-    const { user, latestScore, stats } = await response.json();
+    const response = await fetch(`/api/user/${userId}`);
+    const handledResponse = handleAuthError(response);
+    const { user, latestScore, stats } = await handledResponse.json();
     
     // Update user info
     document.getElementById('user-name').textContent = user.name;
@@ -272,8 +259,9 @@ function updateScoreGrid(latestScore) {
 // Load chart data
 async function loadChartData(userId, timeframe) {
   try {
-    const response = await fetchWithAuth(`/api/scores/${userId}?timeframe=${timeframe}`);
-    const data = await response.json();
+    const response = await fetch(`/api/scores/${userId}?timeframe=${timeframe}`);
+    const handledResponse = handleAuthError(response);
+    const data = await handledResponse.json();
     
     // Show "No data" message if no datasets or empty datasets
     if (!data?.datasets?.length || data.datasets.every(ds => !ds.data?.length)) {
@@ -317,8 +305,9 @@ async function loadChartData(userId, timeframe) {
     yatGradient.addColorStop(1, 'rgba(54, 162, 235, 0.01)');
 
     // Get raw data for timestamps and ranks
-    const rawResponse = await fetchWithAuth(`/api/scores/${userId}?timeframe=${timeframe}&raw=true`);
-    const rawData = await rawResponse.json();
+    const rawResponse = await fetch(`/api/scores/${userId}?timeframe=${timeframe}&raw=true`);
+    const handledRawResponse = handleAuthError(rawResponse);
+    const rawData = await handledRawResponse.json();
     
     // Check if we have any valid raw data
     if (!rawData || !rawData.length) {
@@ -629,7 +618,8 @@ function calculateChanges(data, timeframe) {
   }
   
   // Get raw data for accurate calculations
-  fetchWithAuth(`/api/scores/${currentUserId}?timeframe=${timeframe}&raw=true`)
+  fetch(`/api/scores/${currentUserId}?timeframe=${timeframe}&raw=true`)
+    .then(response => handleAuthError(response))
     .then(response => response.json())
     .then(rawData => {
       const changeContainer = document.getElementById('metric-changes');
@@ -746,6 +736,7 @@ function calculateScorePrediction(firstScore, lastScore, timeframe) {
   if (!prediction7Days || !prediction30Days) return;
   
   fetch(`/api/scores/${currentUserId}?timeframe=${timeframe}&raw=true`)
+    .then(response => handleAuthError(response))
     .then(response => response.json())
     .then(rawData => {
       if (!rawData?.length || rawData.length < 2) {
@@ -893,7 +884,8 @@ async function submitToken() {
       body: JSON.stringify({ token })
     });
     
-    const result = await response.json();
+    const handledResponse = handleAuthError(response);
+    const result = await handledResponse.json();
     
     if (result.success) {
       window.location.reload();
@@ -959,13 +951,14 @@ function setupDiscordFeatures() {
     if (!currentUserId) return;
     
     try {
-      const response = await fetchWithAuth(`/api/settings/${currentUserId}`, {
+      const response = await fetch(`/api/settings/${currentUserId}`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({discord_enabled: discordToggle.checked})
       });
       
-      const data = await response.json();
+      const handledResponse = handleAuthError(response);
+      const data = await handledResponse.json();
       if (!data.success) throw new Error(data.error || 'Failed to update Discord settings');
       
       discordStatus.textContent = 'Settings saved';
@@ -989,13 +982,14 @@ function setupDiscordFeatures() {
         throw new Error('Invalid Discord webhook URL');
       }
       
-      const response = await fetchWithAuth(`/api/settings/${currentUserId}`, {
+      const response = await fetch(`/api/settings/${currentUserId}`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({discord_webhook_url: webhook})
       });
       
-      const data = await response.json();
+      const handledResponse = handleAuthError(response);
+      const data = await handledResponse.json();
       if (!data.success) throw new Error(data.error || 'Failed to save webhook URL');
       
       discordStatus.textContent = 'Webhook URL saved';
@@ -1015,12 +1009,13 @@ function setupDiscordFeatures() {
     discordStatus.className = 'ms-3 small text-info';
     
     try {
-      const response = await fetchWithAuth(`/api/send-discord-notification/${currentUserId}`, {
+      const response = await fetch(`/api/send-discord-notification/${currentUserId}`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'}
       });
       
-      const data = await response.json();
+      const handledResponse = handleAuthError(response);
+      const data = await handledResponse.json();
       if (!data.success) throw new Error(data.error || 'Failed to send notification');
       
       discordStatus.textContent = 'Notification sent!';
@@ -1074,13 +1069,15 @@ async function addNewToken() {
       body: JSON.stringify({ token })
     });
     
+    const handledResponse = handleAuthError(response);
+    
     // Check if the response is JSON before trying to parse it
-    const contentType = response.headers.get('content-type');
+    const contentType = handledResponse.headers.get('content-type');
     if (!contentType || !contentType.includes('application/json')) {
       throw new Error('Server returned non-JSON response. Please check server logs.');
     }
     
-    const result = await response.json();
+    const result = await handledResponse.json();
     
     if (result.success) {
       // Close modal and refresh users
@@ -1117,10 +1114,11 @@ function forceFetch(userId) {
     Fetching...
   `;
   
-  fetchWithAuth(`/api/force-fetch/${userId}`, {
+  fetch(`/api/force-fetch/${userId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' }
   })
+    .then(response => handleAuthError(response))
     .then(response => response.json())
     .then(data => {
       if (data.success) selectUser(userId);
@@ -1149,6 +1147,7 @@ function setupAutoRefresh() {
   setInterval(() => {
     if (currentUserId) {
       fetch(`/api/user/${currentUserId}`)
+        .then(response => handleAuthError(response))
         .then(response => response.json())
         .then(data => {
           const lastUpdatedText = document.getElementById('last-updated').textContent;
@@ -1181,12 +1180,13 @@ function setupTokenManagement() {
       `;
       
       try {
-        const response = await fetchWithAuth(`/api/user/${currentUserId}/delete`, {
+        const response = await fetch(`/api/user/${currentUserId}/delete`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'}
         });
         
-        const data = await response.json();
+        const handledResponse = handleAuthError(response);
+        const data = await handledResponse.json();
         if (!data.success) throw new Error(data.error || 'Failed to delete token');
         
         // Reload page on success
@@ -1210,16 +1210,17 @@ function resetDeleteButton(button) {
   `;
 }
 
-// Document ready handler with all initialization
-document.addEventListener('DOMContentLoaded', function() {
-  initDropdowns();
-  checkUsers();
-  setupTimeframeButtons();
-  setupDiscordFeatures();
-  setupTokenModal();
-  setupTokenManagement();
-  setupAutoRefresh();
-  
+// Run when the page loads
+document.addEventListener('DOMContentLoaded', async () => {
+  // Handle token submission
   document.getElementById('token-submit')?.addEventListener('click', submitToken);
   document.getElementById('token-input')?.addEventListener('keypress', e => e.key === 'Enter' && submitToken());
+  
+  // Initialize UI components
+  initDropdowns();
+  setupTokenModal();
+  setupAutoRefresh();
+  
+  // Check for existing users
+  await checkUsers();
 }); 
