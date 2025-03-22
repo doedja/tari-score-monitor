@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tari Score Monitor</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#4557b9',
+            secondary: '#6c7ee1',
+            accent: '#3a4d8f',
+            dark: '#2d3748',
+          }
+        }
+      }
+    }
+  </script>
+  
+  <!-- Chart.js and custom scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js" defer></script>
+  <script src="/scripts.js" defer></script>
+  
+  <style>
+    :root {
+      --primary-color: #6366f1;
+      --primary-dark: #4f46e5;
+      --primary-light: #a5b4fc;
+      --text-primary: #374151;
+      --bg-light: #f9fafb;
+    }
+    
+    body {
+      font-family: 'Inter', 'Helvetica', 'Arial', sans-serif;
+      background-color: var(--bg-light);
+      color: var(--text-primary);
+      font-size: 15px; /* Moderate base font size */
+      line-height: 1.5;
+    }
+    
+    .text-primary {
+      color: var(--primary-color);
+    }
+    
+    .bg-primary {
+      background-color: var(--primary-color);
+    }
+    
+    .border-primary {
+      border-color: var(--primary-color);
+    }
+    
+    /* More balanced font sizes */
+    .text-xs {
+      font-size: 0.8125rem !important; /* Increased slightly from 0.75rem */
+    }
+    
+    .text-sm {
+      font-size: 0.9375rem !important; /* Slightly larger than default */
+    }
+    
+    .text-base {
+      font-size: 1.0625rem !important; /* Slightly larger than default */
+    }
+    
+    .text-lg {
+      font-size: 1.1875rem !important; /* Balanced size */
+    }
+    
+    .text-xl {
+      font-size: 1.3125rem !important; /* Balanced size */
+    }
+    
+    .text-2xl {
+      font-size: 1.5rem !important; /* Returned to default */
+    }
+    
+    /* Balanced chart text */
+    #score-chart {
+      font-size: 0.9375rem;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen">
+  <div class="max-w-7xl mx-auto p-4 sm:p-6">
+    <!-- Login Form -->
+    <div id="login-form" class="hidden max-w-md mx-auto mt-10">
+      <div class="bg-white rounded-lg shadow-md overflow-hidden">
+        <div class="border-b border-gray-200 p-4 sm:p-6">
+          <h2 class="text-2xl font-bold text-primary text-center">Tari Score Monitor</h2>
+        </div>
+        <div class="p-6">
+          <h3 class="text-xl text-center mb-6">Enter your Tari Token to get started</h3>
+          <div class="space-y-4">
+            <div class="flex">
+              <input type="text" id="token-input" class="flex-1 px-4 py-2 rounded-l-md border border-gray-300 focus:ring-2 focus:ring-primary focus:border-primary focus:outline-none" placeholder="Your Tari Token">
+              <button id="token-submit" class="bg-primary hover:bg-accent text-white px-4 py-2 rounded-r-md transition-colors font-medium">Submit</button>
+            </div>
+            <div id="token-error" class="hidden bg-red-50 text-red-600 p-3 rounded-md border border-red-200"></div>
+            <div class="text-center text-gray-500 text-sm mt-4">
+              Your token is used to fetch your Tari scores securely
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Dashboard -->
+    <div id="dashboard" class="hidden">
+      <!-- Header -->
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <h1 class="text-3xl font-bold text-primary">Tari Score Monitor</h1>
+        <div class="flex space-x-2 items-center">
+          <button id="add-token-btn" class="bg-secondary hover:bg-accent text-white px-4 py-2 rounded-md text-sm font-medium flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            Add Token
+          </button>
+          <div class="flex items-center gap-2">
+            <div class="relative" id="dropdown-container">
+              <button class="bg-white border border-gray-300 rounded-md px-4 py-2 inline-flex items-center text-sm font-medium hover:bg-gray-50" id="user-dropdown">
+                <span>Select User</span>
+                <svg class="ml-2 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                </svg>
+              </button>
+              <div class="hidden absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg z-10 py-1" id="user-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Add Token Modal -->
+      <div id="add-token-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-semibold text-gray-800">Add New Token</h3>
+            <button id="close-modal" class="text-gray-400 hover:text-gray-500">
+              <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div class="space-y-4">
+            <div>
+              <label for="new-token-input" class="block text-sm font-medium text-gray-700 mb-1">Tari Token</label>
+              <input type="text" id="new-token-input" class="w-full px-4 py-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-primary focus:border-primary focus:outline-none" placeholder="Enter new Tari Token">
+            </div>
+            <div id="new-token-error" class="hidden bg-red-50 text-red-600 p-3 rounded-md border border-red-200"></div>
+            <div class="flex justify-end">
+              <button id="add-new-token" class="bg-primary hover:bg-accent text-white px-4 py-2 rounded-md transition-colors font-medium">Add Token</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- User Data -->
+      <div id="user-data">
+        <div class="bg-white rounded-lg shadow-md overflow-hidden mb-6">
+          <!-- User Header -->
+          <div class="border-b border-gray-200 p-4 sm:p-6">
+            <div id="user-header" class="flex flex-col sm:flex-row sm:items-center gap-4">
+              <div id="user-photo-container" class="hidden">
+                <img id="user-photo" class="w-16 h-16 rounded-full object-cover ring-2 ring-white shadow" alt="User Photo">
+              </div>
+              <div class="flex-1">
+                <h2 id="user-name" class="text-2xl font-bold text-gray-800"></h2>
+                <div class="flex items-center">
+                  <p id="last-updated" class="text-sm text-gray-500 mr-2"></p>
+                  <button id="force-fetch-btn" class="hidden text-emerald-500 hover:text-emerald-600 transition-colors text-sm flex items-center" title="Force fetch latest data for this user">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+                    </svg>
+                    <span>Refresh</span>
+                  </button>
+                </div>
+              </div>
+              <span id="user-rank" class="hidden bg-secondary text-white px-3 py-1 rounded-full text-sm font-semibold"></span>
+            </div>
+          </div>
+          
+          <!-- Score Cards -->
+          <div class="p-4 sm:p-6">
+            <div id="score-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+              <div class="flex justify-center items-center p-8">
+                <div class="flex flex-col items-center">
+                  <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  <p class="mt-4 text-gray-600">Loading user data...</p>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Metric Changes Section -->
+            <div id="metric-changes" class="hidden mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-4" style="transition: opacity 0.3s ease-in-out;"></div>
+            
+            <!-- Score Analytics Section -->
+            <div id="score-analytics" class="hidden mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+              <div class="text-sm font-medium text-gray-700 mb-2">Score Analytics:</div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <!-- Milestone card -->
+                <div class="bg-gray-50 p-3 rounded-md">
+                  <div class="text-xs text-gray-500 font-medium mb-1">Next Milestone</div>
+                  <div id="next-milestone" class="flex items-center justify-between">
+                    <div class="flex items-center">
+                      <span id="milestone-badge" class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-500 mr-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                          <path fill-rule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                        </svg>
+                      </span>
+                      <span id="milestone-text" class="font-medium">Loading...</span>
+                    </div>
+                    <div id="milestone-progress" class="text-xs text-gray-500"></div>
+                  </div>
+                  <div class="mt-2">
+                    <div class="bg-gray-200 rounded-full h-2 overflow-hidden">
+                      <div id="milestone-progress-bar" class="bg-blue-500 h-2 rounded-full" style="width: 0%"></div>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Prediction card -->
+                <div class="bg-gray-50 p-3 rounded-md">
+                  <div class="text-xs text-gray-500 font-medium mb-1">Growth Prediction</div>
+                  <div id="prediction-content">
+                    <div class="flex flex-col">
+                      <div class="flex items-center mb-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-blue-500 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
+                        </svg>
+                        <span id="prediction-7days" class="text-sm">Loading...</span>
+                      </div>
+                      <div class="flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-blue-500 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
+                        </svg>
+                        <span id="prediction-30days" class="text-sm">Loading...</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Chart Section -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+              <div class="border-b border-gray-200 p-4">
+                <h3 class="text-lg font-semibold text-gray-800">Score & Rank History</h3>
+              </div>
+              <div class="p-4">
+                <div id="timeframe-buttons" class="flex space-x-2 mb-4">
+                  <button data-timeframe="hourly" class="px-3 py-1 rounded-md text-sm font-medium bg-white text-primary border border-primary">1H</button>
+                  <button data-timeframe="daily" class="px-3 py-1 rounded-md text-sm font-medium bg-white text-primary border border-primary">7D</button>
+                  <button data-timeframe="weekly" class="px-3 py-1 rounded-md text-sm font-medium bg-white text-primary border border-primary">4W</button>
+                  <button data-timeframe="all" class="px-3 py-1 rounded-md text-sm font-medium bg-primary text-white">All</button>
+                </div>
+                <div class="h-[300px]">
+                  <canvas id="score-chart"></canvas>
+                </div>
+              </div>
+            </div>
+            
+            <!-- YAT Holdings Chart -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mt-4">
+              <div class="border-b border-gray-200 p-4">
+                <h3 class="text-lg font-semibold text-gray-800">YAT Holdings History</h3>
+              </div>
+              <div class="p-4">
+                <div class="h-[200px]">
+                  <canvas id="yat-chart"></canvas>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Settings Section -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+              <div class="border-b border-gray-200 p-4">
+                <h3 class="text-lg font-semibold text-gray-800">Settings</h3>
+              </div>
+              <div class="p-4">
+                <div class="flex flex-col space-y-4">
+                  <div class="flex items-center">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" id="discord-toggle" class="sr-only peer">
+                      <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                    </label>
+                    <div class="ml-3">
+                      <div class="text-gray-800">Send Discord Notifications</div>
+                      <span class="text-sm text-gray-500">Get notified when your score changes</span>
+                    </div>
+                  </div>
+                  
+                  <div class="flex flex-col space-y-1">
+                    <label for="discord-webhook-url" class="text-sm font-medium text-gray-700">Discord Webhook URL</label>
+                    <div class="flex">
+                      <input type="text" id="discord-webhook-url" placeholder="https://discord.com/api/webhooks/..." 
+                             class="flex-grow border border-gray-300 rounded-l-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
+                      <button type="button" id="save-webhook-url" 
+                              class="bg-primary hover:bg-accent text-white rounded-r-md py-2 px-3 text-sm font-medium transition-colors">Save</button>
+                    </div>
+                    <p class="text-xs text-gray-500">Create a webhook URL in your Discord server settings and paste it here</p>
+                  </div>
+                  
+                  <div class="flex items-center pt-2">
+                    <button id="send-discord-now" class="flex items-center px-4 py-2 bg-primary hover:bg-accent text-white rounded-md transition-colors text-sm font-medium">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                      </svg>Send Discord Now
+                    </button>
+                    <div id="discord-status" class="ml-3 text-sm"></div>
+                  </div>
+                  
+                  <!-- Divider line -->
+                  <hr class="border-gray-200 my-2">
+                  
+                  <!-- Delete Token Button -->
+                  <div class="pt-2">
+                    <button id="delete-token" class="flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors text-sm font-medium">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>Delete Token
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html> 
