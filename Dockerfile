@@ -6,11 +6,16 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --only=production
 
+# Create data directory for persistent storage
+RUN mkdir -p /app/data
+
 # Copy application files
 COPY . .
 
 # Set environment variables
 ENV NODE_ENV=production
+ENV PORT=3000
+ENV DB_PATH=/app/data/tari_monitor.db
 
 # Expose the port the app runs on
 EXPOSE 3000

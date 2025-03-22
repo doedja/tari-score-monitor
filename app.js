@@ -18,7 +18,12 @@ const defaultApiUrl = 'https://airdrop.tari.com/api/user/details';
 
 // Middleware setup
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Log app startup
+console.log(`Starting Tari Score Monitor...`);
+console.log(`Database path: ${dbPath}`);
+console.log(`Static files path: ${path.join(__dirname, 'public')}`);
 
 // Initialize database tables and settings
 function initializeDatabase() {
