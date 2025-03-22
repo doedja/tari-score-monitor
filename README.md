@@ -46,7 +46,6 @@ Edit the `.env` file to configure the application:
 ```
 PORT=3000                                               # Server port
 DB_PATH=./tari_monitor.db                               # Path to the SQLite database
-TARI_API_URL=https://airdrop.tari.com/api/user/details  # Tari API URL
 ADMIN_USERNAME=admin                                    # Admin username for Basic Auth
 ADMIN_PASSWORD=admin                                    # Admin password for Basic Auth
 ```

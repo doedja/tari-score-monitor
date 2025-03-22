@@ -14,7 +14,7 @@ const db = new Database(dbPath);
 const fetchIntervalMin = parseInt(process.env.FETCH_INTERVAL_MIN || 240, 10);
 const fetchIntervalMax = parseInt(process.env.FETCH_INTERVAL_MAX || 300, 10);
 const discordNotificationInterval = parseInt(process.env.DISCORD_NOTIFICATION_INTERVAL || 300, 10);
-const defaultApiUrl = process.env.TARI_API_URL || 'https://airdrop.tari.com/api/user/details';
+const defaultApiUrl = 'https://airdrop.tari.com/api/user/details';
 
 // Middleware setup
 app.use(express.json());
