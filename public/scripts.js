@@ -692,17 +692,13 @@ function calculateNextMilestone(currentScore) {
   if (!analyticsContainer) return;
   
   // Define milestones
-  const milestones = [
-    { value: 10000, name: "10K Score" },
-    { value: 50000, name: "50K Score" },
-    { value: 100000, name: "100K Score" },
-    { value: 250000, name: "250K Score" },
-    { value: 500000, name: "500K Score" },
-    { value: 1000000, name: "1M Score" },
-    { value: 2000000, name: "2M Score" },
-    { value: 5000000, name: "5M Score" },
-    { value: 10000000, name: "10M Score" }
-  ];
+  const milestones = [];
+  for (let i = 1; i <= 8; i++) {
+    const value = Math.pow(10, i) * 1000;
+    const name = `${value / 1000}K Score`;
+    milestones.push({ value, name });
+  }
+  milestones.push({ value: 1000000000, name: "1B Score" });
   
   // Find next milestone
   const nextMilestone = milestones.find(m => currentScore < m.value);
