@@ -2,7 +2,7 @@
 
 A simple web application for monitoring user scores from the Tari Airdrop platform. Built for fun.
 
-This project is built to work with [Tari Universe](https://github.com/tari-project/universe), an open-source project that aims to create a decentralized digital assets platform.
+This project integrates with the [Tari Airdrop website](https://airdrop.tari.com) to help users track their airdrop scores and rankings.
 
 ## Features
 
