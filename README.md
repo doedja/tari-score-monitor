@@ -124,9 +124,7 @@ docker run -d \
 This application works well with Coolify, which handles persistent storage automatically:
 
 1. Import this Git repository into your Coolify instance
-2. Set the following environment variables:
-   - `DB_PATH=/app/data/tari_monitor.db`
-   - Your admin credentials and other config options
+2. Set the environment variables
 3. Deploy the application
 4. Coolify will automatically mount a persistent volume for the `/app/data` directory
 
